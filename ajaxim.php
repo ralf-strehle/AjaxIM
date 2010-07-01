@@ -21,29 +21,31 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
+//
+// ==========
+//
+// modified June 2010 by Ralf Strehle (ralf.strehle@yahoo.de)
 
 require_once('config.php');
 require_once('libraries/db/base.php');
 require_once('libraries/server/base.php');
 
 # import the database library
-if(strlen(DB_ENGINE)) {
-    require_once('libraries/db/' . DB_ENGINE . '.php');
-    $db_class = DB_ENGINE . '_Database';
+require_once('libraries/db/' . DB_ENGINE . '.php');
+$db_class = DB_ENGINE . '_Database';
 
-    if (!function_exists('class_alias')) {
-        // Allows us to alias Database library classes to standardized names
-        function class_alias($original, $alias) {
-            eval('class ' . $alias . ' extends ' . $original . ' {}');
-        }
+if (!function_exists('class_alias')) {
+    // Allows us to alias Database library classes to standardized names
+    function class_alias($original, $alias) {
+        eval('class ' . $alias . ' extends ' . $original . ' {}');
     }
-    
-    class_alias(DB_ENGINE . '_Database', 'Database');
-    class_alias(DB_ENGINE . '_User', 'User');
-    class_alias(DB_ENGINE . '_Status', 'Status');
-    class_alias(DB_ENGINE . '_Message', 'Message');
-    class_alias(DB_ENGINE . '_Friend', 'Friend');
 }
+
+class_alias(DB_ENGINE . '_Database', 'Database');
+class_alias(DB_ENGINE . '_User', 'User');
+class_alias(DB_ENGINE . '_Status', 'Status');
+class_alias(DB_ENGINE . '_Message', 'Message');
+class_alias(DB_ENGINE . '_Friend', 'Friend');
 
 // Fix problems with magic_quotes_gpc/sybase
 if(function_exists('get_magic_quotes_gpc') && get_magic_quotes_gpc()) {
@@ -55,7 +57,7 @@ if(function_exists('get_magic_quotes_gpc') && get_magic_quotes_gpc()) {
     } else {
         foreach($_POST as $key => $val) $_POST[$key] = str_replace("''", "'", $val);
         foreach($_GET as $key => $val) $_GET[$key] = str_replace("''", "'", $val);
-        foreach($_COOKIE as $key => $val) $_COOKIE[$key] = str_replace("''", "'", $val);            
+        foreach($_COOKIE as $key => $val) $_COOKIE[$key] = str_replace("''", "'", $val);
     }
 }
 
@@ -65,19 +67,25 @@ $im_class = IM_LIBRARY . '_IM';
 $im = new $im_class();
 $action = preg_replace('/^' . preg_quote($_SERVER['SCRIPT_NAME'], '/') . '\/(.+?)(\?.+)?$/', '\1', $_SERVER['REQUEST_URI']);
 
-if(substr($action, 0, 1) != '_' && method_exists($im, $action))
-    if($action == 'poll') {
-        if($_GET['method'] == 'comet') {
+if (substr($action, 0, 1) != '_' && method_exists($im, $action)) {
+    if ($action == 'poll') {
+        if ($_GET['method'] == 'comet') {
             $im->poll('comet');
-        } else {
+        } elseif (JSONP) {
             print $_GET['callback'] . '(' . json_encode($im->poll($_GET['method'])) . ')';
+        } else {
+            print json_encode($im->poll($_GET['method']));
         }
     } else {
         $execute = call_user_func_array(array($im, $action), $_POST);
-        if($execute)
-            print json_encode($execute !== false ? $execute : array('e'=>'wrong args'));
+        if ($execute) {
+            print json_encode($execute);
+        } else {
+            print json_encode(array('e'=>'empty result', 'action'=>$action, 'post'=>$_POST));
+        }
     }
-else
+} else {
     print json_encode(array('e'=>'no method'));
+}
 
 /* End of ajaxim.php */

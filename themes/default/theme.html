@@ -82,51 +82,42 @@
     <form id="imjs-login">
         <fieldset>
             <h2>Login</h2>
-            
             <p class="error"></p>
-            
             <p>
                 <label for="imjs-login-username">Username</label>
                 <input type="text" name="username" id="imjs-login-username" />
             </p>
-            
             <p>
                 <label for="imjs-login-password">Password</label>
                 <input type="password" name="password" id="imjs-login-password" />
             </p>
-            
             <p class="imjs-submit">
-                <button id="imjs-login-submit">Sign In</button>
+                <button id="imjs-login-submit" onclick="AjaxIM.client.login($('#imjs-login-username').val(), $('#imjs-login-password').val()); return false;">Sign In</button>
             </p>
         </fieldset>
-        
-        <p id="imjs-logged-in">Signed in as <strong>{username}</strong>. <a href="#logout">Sign Out</a>.</p>
+        <p id="imjs-logged-in">Signed in as <strong>{username}</strong>. <a href="#logout" onclick="AjaxIM.client.logout(); return false;">Sign Out</a>.</p>
     </form>
-    
+<!--
     <form id="imjs-register">
         <fieldset>
             <h2>Register</h2>
-            
             <p class="error"></p>
-            
             <p>
                 <label for="imjs-register-username">Username</label>
                 <input type="text" name="username" id="imjs-register-username" />
             </p>
-            
             <p>
                 <label for="imjs-register-password">Password</label>
                 <input type="password" name="password" id="imjs-register-password" />
             </p>
-            
             <p>
                 <label for="imjs-register-cpassword">Confirm Password</label>
                 <input type="password" name="cpassword" id="imjs-register-cpassword" />
             </p>
-            
             <p class="imjs-submit">
                 <button id="imjs-register-submit">Register</button>
             </p>
         </fieldset>
     </form>
+-->
 </div>

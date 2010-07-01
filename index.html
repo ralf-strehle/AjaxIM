@@ -1,0 +1,153 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en-US" lang="en-US" dir="ltr">
+<head>
+<title>Ajax-IM Test site</title>
+<link type="text/css" href="themes/default/theme.css" rel="stylesheet" />
+<script type="text/javascript" src="js/class.js"></script>
+<script type="text/javascript" src="js/jquery-1.4.2.min.js"></script>
+<script type="text/javascript" src="js/jquery.json-2.2.min.js"></script>
+<script type="text/javascript" src="js/jquery.jstore-all-min.js"></script>
+<script type="text/javascript" src="js/jquery.jsonp-1.1.3.min.js"></script>
+<script type="text/javascript" src="js/jquery.md5.js"></script>
+<script type="text/javascript" src="js/im.js"></script>
+<script type="text/javascript" src="js/im.load.js?php"></script>
+<script type="text/javascript">
+/* <![CDATA[ */
+AjaxIM.client.form('#ajaxim');
+function myKeyPress(e, me) {
+    jQuery(me).height(18);
+    if (me.scrollHeight != jQuery(me).height()) {
+        jQuery(me).height(me.scrollHeight);
+    }
+}
+function stopEvent(event) {
+    if (event.preventDefault) {
+        event.preventDefault();
+        event.stopPropagation();
+    } else {
+        event.returnValue = false;
+        event.cancelBubble = true;
+    }
+}
+function myKeyDown(e, me) {
+    var e = e || event;
+    var k = e.keyCode;
+    if (k == 13 && !e.shiftKey) {
+        AjaxIM.client.send(jQuery(me).parents('.imjs-chatbox').data('username'), jQuery(me).val());
+        jQuery(me).val('');
+        stopEvent(e);
+    } else {
+        return String.fromCharCode(k);
+    }
+}
+function myKeyUp(e, me) {
+    var e = e || event;
+    var k = e.keyCode;
+    if (k == 13 && !e.shiftKey) {
+        jQuery(me).height(18);
+        stopEvent(e);
+    } else {
+        return String.fromCharCode(k);
+    }
+}
+/* ]]> */
+</script>
+</head>
+<body>
+<h1>Unofficial test site for Ajax IM 4.0</h1>
+The original Ajax IM 4.0 alpha is hosted on <a href="http://ajaxim.com/">ajaxim.com</a><br/>
+<br/>
+users: test1 - test9<br/>
+password: password<br/>
+Use different browsers to chat with yourself.<br/>
+<br/>
+<div id="ajaxim"></div>
+<div id="imjs-panel">
+<ul id="imjs-bar">
+    <li class="imjs-application-tab" onclick="alert('home');"><div class="imjs-application-button home">Home<small>Home</small></div></li>
+    <li class="imjs-application-tab" onclick="alert('view profile');"><div class="imjs-application-button profile"><small>View Profile</small></div></li>
+    <li class="imjs-application-tab" onclick="alert('editprofile');"><div class="imjs-application-button editprofile"><small>Edit Profile</small></div></li>
+    <li class="imjs-application-tab" onclick="alert('contacts');"><div class="imjs-application-button contacts"><small>Contacts</small></div></li>
+    <li class="imjs-application-tab" onclick="alert('messages');"><div class="imjs-application-button messages"><small>Messages</small></div></li>
+    <li class="imjs-application-tab" onclick="alert('search');"><div class="imjs-application-button search"><small>Search</small></div></li>
+    <li class="imjs-application-tab" onclick="alert('videos');"><div class="imjs-application-button videos"><small>Videos</small></div></li>
+    <li id="imjs-friends" class="imjs-not-connected">
+        <div class="imjs-button"><span><span class="imjs-bullet">&bull;</span>Friends <span class="imjs-count">(<span>0</span>)</span></span></div>
+        <div id="imjs-friends-panel" class="imjs-chatbox">
+            <div class="imjs-header">
+                <div>{username}</div>
+            </div>
+            <ul id="imjs-friends-list">
+                <li class="imjs-friend-group imjs-default">
+                    <div class="imjs-friend-group-header">{group}</div>
+                    <ul>
+                        <li class="imjs-friend imjs-default"><strong>&bull;</strong> {username}</li>
+                    </ul>
+                </li>
+            </ul>
+            <form action="">
+                <p><input type="text" id="imjs-search-friends" value="Search" /></p>
+            </form>
+            <div style="height: 1px; background: #DDD; width: 179px; float: left"></div>
+            <div style="height: 1px; background: #000; width: 21px; float: left"></div>
+        </div>    
+    </li>
+    <li id="imjs-scroll-right" class="imjs-scroll"><div class="imjs-scroll-button">{count}</div></li>
+    <li class="imjs-tab imjs-default">
+        <div class="imjs-button"><span class="imjs-bullet">&bull;</span>{label}</div>
+        <a href="#" class="imjs-bar-close">x</a>
+        <span class="imjs-notification">{count}</span>
+        <div class="imjs-chatbox">
+            <form action="">
+                <div>
+                    <div class="imjs-header"><div>{username}</div><a href="#" class="imjs-close">x</a></div>
+                    <ul class="imjs-msglog">
+                        <li class="imjs-date">
+                            <ul>
+                                <li>
+                                    <span class="imjs-msg-time">hh:MM TT &bull;</span>
+                                    <p class="imjs-date-date">ddd, mmmm d, yyyy</p>
+                                </li>
+                            </ul>
+                        </li>
+                       <li class="imjs-error">
+                            <ul>
+                                <li>
+                                    <span class="imjs-msg-time">hh:MM TT &bull;</span>
+                                    <p class="imjs-error-error">ddd, mmmm d, yyyy</p>
+                                </li>
+                            </ul>
+                        </li>
+                        <li class="imjs-msg-a">                    
+                            <span>{username}</span>
+                            <ul class="imjs-msg-a-container">
+                                <li class="imjs-msg-a-msg">
+                                    <span class="imjs-msg-time">hh:MM TT &bull;</span>
+                                    <p>{message}</p>
+                                </li>
+                            </ul>
+                        </li>
+                        <li class="imjs-msg-b">
+                            <span>{username}</span>
+                            <ul class="imjs-msg-b-container">
+                                <li class="imjs-msg-b-msg">
+                                    <span class="imjs-msg-time">hh:MM TT &bull;</span>
+                                    <p>{message}</p>
+                                </li>
+                            </ul>
+                        </li>
+                    </ul>
+                    <!-- <textarea cols="5" rows="5" class="imjs-input"></textarea> -->
+                    <textarea cols="5" rows="5" class="imjs-input" onkeydown="myKeyDown(event, this);" onkeyup="myKeyUp(event, this);" onkeypress="myKeyPress(event, this);"></textarea>
+                </div>
+            </form>
+        <div style="height: 1px; background: #000; width: 46px; float: left"></div>
+        <div style="height: 1px; background: #DDD; width: 179px; float: left"></div>
+        </div>
+    </li>
+    <li id="imjs-scroll-left" class="imjs-scroll"><div class="imjs-scroll-button">{count}</div></li>
+</ul>
+</div>
+<span class="imjs-tooltip"><span>{tip}</span></span>
+</body>
+</html>

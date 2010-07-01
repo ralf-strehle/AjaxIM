@@ -11,54 +11,64 @@
  * Requirements: MySQL 5.0+
  */
 
-class MySQL_Database extends BaseDatabase {
+class MySQL_Database extends BaseDatabase
+{
     private static $_instance = false;
-
-    public static function instance() {
-        if(self::$_instance === false) {
-            // create instance
+    
+    protected function __construct() {}
+    
+    private function __clone() {}
+    
+    public static function instance()
+    {
+        // singleton
+        if (self::$_instance === false) {
             self::$_instance = new PDO('mysql:dbname=' . MYSQL_DATABASE . ';host=' . MYSQL_HOSTNAME, MYSQL_USERNAME, MYSQL_PASSWORD);
         }
-        
         return self::$_instance;
     }
 }
 
-class MySQL_User extends BaseUser {
-    function __construct($username, $password, $user_id, $ip='', $last_login=0) {
+class MySQL_User extends BaseUser
+{
+    public $username = '';
+    public $password = '';
+    public $user_id = '';
+    public $ip = null;
+    public $last_login = null;
+    public $status = null;
+    
+    function __construct($username, $password, $user_id, $ip='', $last_login=0)
+    {
         parent::__construct($username, $password, $user_id, $ip, $last_login);
         
         self::$db = MySQL_Database::instance();
         
         $this->username = $username;
         $this->password = $password;
-        $this->user_id = $user_id;
+        $this->user_id = (int) $user_id;
         $this->ip = $ip;
         $this->last_login = $last_login;
     }
     
-    public static function authenticate($username, $password) {
-        if(!self::$db)
+    public static function authenticate($username, $password)
+    {
+        if (!self::$db)
             self::$db = MySQL_Database::instance();
-            
-        $username = preg_replace('/([%_])/', '\\\\\1', $username);
-    
-        $auth_sql = "SELECT * FROM " . MYSQL_PREFIX . "users
-            WHERE username LIKE :username LIMIT 1";
-        $auth = self::$db->prepare($auth_sql);
+        
+        #NOT NEEDED IF WE TEST FOR EQUAL, WHICH IS USUAL IN LOGIN FUNCTIONS
+        #$username = preg_replace('/([%_])/', '\\\\\1', $username);
+        
+        $sql = 'SELECT * FROM ' . MYSQL_PREFIX . 'users WHERE username = :username LIMIT 1';
+        $auth = self::$db->prepare($sql);
         $auth->execute(array(':username' => $username));
-
-        if($auth->rowCount()) {
+        
+        if ($auth->rowCount()) {
             $user = $auth->fetch(PDO::FETCH_OBJ);
-            
             // hash given password using actual password hash, then test against real password
             $pw_hash = substr($user->password, 0, 8);
-            
-            if($user->password == $pw_hash . md5($pw_hash . $password)) {
-                $user_obj = new MySQL_User($user->username, $user->password, $user->user_id,
-                    $user->last_known_ip, $user->last_login);
-                
-                return $user_obj;
+            if($user->password == $pw_hash.md5($pw_hash.$password)) {
+                return new MySQL_User($user->username, $user->password, $user->user_id, ip2long($_SERVER['REMOTE_ADDR']), time());
             } else {
                 return false;
             }
@@ -67,20 +77,22 @@ class MySQL_User extends BaseUser {
         }
     }
     
-    public static function get($user) {
+    public static function get($user)
+    {
         if(!self::$db)
-            self::$db = MySQL_Database::instance();
-            
+            self::$db = MySQL_Database::instance();        
     }
     
-    public static function find($username) {
+    public static function find($username)
+    {
         if(!self::$db)
             self::$db = MySQL_Database::instance();
-            
+        
+        ### not sure what this is good for. as we use LIKE to find and LIMIT 1 to get only one record,
+        ### why do we need to replace the jokers?
         $username = preg_replace('/([%_])/', '\\\\\1', $username);
-    
-        $find_sql = "SELECT * FROM " . MYSQL_PREFIX . "users
-            WHERE username LIKE :username LIMIT 1";
+        
+        $find_sql = 'SELECT * FROM ' . MYSQL_PREFIX . 'users WHERE username LIKE :username LIMIT 1';
         $find = self::$db->prepare($find_sql);
         $find->execute(array(':username' => $username));
         
@@ -88,19 +100,23 @@ class MySQL_User extends BaseUser {
         return new User($user->username, $user->password, $user->user_id, $user->last_known_ip, $user->last_login);
     }
     
-    public function status($s=null, $message=null) {
-        if(!$this->status) {
+    public function status($s = null, $message = null)
+    {
+        if (!$this->status) {
             $this->status = MySQL_Status::of($this->user_id);
         }
         
-        if($s) {            
+        if ($s) {            
             return $this->status->is($s, $message);
         } else {
             return $this->status;
         }
     }
     
-    public function ip($ip=null) {
+    ### seems to be not in use at all
+    ### we can easily update the ip in ::authenticate
+    public function ip($ip=null)
+    {
         if($ip) {
             $this->ip = $ip;
             
@@ -131,7 +147,9 @@ class MySQL_User extends BaseUser {
         }
     }
     
-    public function lastLogin($ll=null) {
+    ### not in use right now, we directly set the last_login in MySQL_user::authenticate
+    public function lastLogin($ll=null)
+    {
         if($ll) {
             $this->last_login = $ll;
             
@@ -162,69 +180,82 @@ class MySQL_User extends BaseUser {
         }
     }
     
-    public function save($id=null) {
-    }
+    public function save($id=null) {}
 }
 
-class MySQL_Status extends BaseStatus {
+
+class MySQL_Status extends BaseStatus
+{
     const Offline = 0;
     const Available = 1;
     const Away = 2;
     const Invisible = 3;
     
-    public $s = null;
+    public $status_id = 0;
     public $message = '';
     public $user_id = 0;
     
-    function __construct($user_id, $s=null, $message='') {
+    ### alternative design:
+    ### __construct($user_id, $s=null, $message='')     use when user sets new status
+    ### __construct($user_id)                           use when status needs to be read from DB
+    ### save()                                          save status in database
+    ### getters and setters as needed
+    
+    function __construct($user_id, $status_id=0, $message='')
+    {
         self::$db = MySQL_Database::instance();
         
-        $this->s = $s;
+        $this->status_id = $status_id;
         $this->message = $message;
         $this->user_id = $user_id;
     }
     
-    public static function of($user) {
-        $status_sql = "SELECT s, message, s.user_id FROM " . MYSQL_PREFIX . "status as s ";
-        if(is_int($user)) {
-            $status_sql .= "WHERE user_id = :user";
+    public static function of($user)
+    {
+        if (!self::$db) self::$db = MySQL_Database::instance();
+        
+        $sql = 'SELECT s.status, s.message, s.user_id FROM '.MYSQL_PREFIX.'status AS s';
+        if (is_int($user) || 1) {
+            $sql .= ' WHERE s.user_id = :user';
         } else {
-            $status_sql .= "LEFT JOIN " . MYSQL_PREFIX . "users as u ON u.user_id=s.user_id WHERE u.username = :user";
+            $sql .= ' LEFT JOIN '.MYSQL_PREFIX.'users AS u ON u.user_id = s.user_id WHERE u.username = :user';
         }
-        $status_sql .= " LIMIT 1";
+        $sql .= ' LIMIT 1';
         
         $prep = self::$db->prepare($sql);
-        $prep->execute(array(':user' => $user));        
+        $prep->execute(array(':user' => $user));
         $status = $prep->fetch(PDO::FETCH_OBJ);
         
-        return new Status($status->s, $status->message, $status->user_id);
+        return new Status($status->user_id, $status->status, $status->message);
     }
-
-    public function is($s, $message='') {
-        $status_sql = "INSERT INTO " . MYSQL_PREFIX . "status (user_id, message, status) VALUES(:user_id, :message, :s)
-            ON DUPLICATE KEY UPDATE 
-            status = :s, message = :message";
-        $prep = self::$db->prepare($status_sql);
-        
-        $this->s = $s;
+    
+    public function is($status_id, $message='')
+    {
+        $this->status_id = $status_id;
         $this->message = $message;
-
+        
+        $sql = "INSERT INTO " . MYSQL_PREFIX . "status (user_id, message, status) VALUES(:user_id, :message, :status_id)
+            ON DUPLICATE KEY UPDATE status = :status_id, message = :message";
+        $prep = self::$db->prepare($sql);
+        
         $changed_status = $prep->execute(array(
-            ':s' => $s,
+            ':status_id' => $status_id,
             ':message' => $message,
             ':user_id' => $this->user_id
         ));
         
-        if($changed_status) {        
-            // broadcast status update to friends
-            $update_friends_sql = "INSERT INTO " . MYSQL_PREFIX . "messages (from_id, to_id, message, type)
-                SELECT :user_id AS from_id, friend_id as to_id, :status as message, 's' as type FROM " . MYSQL_PREFIX . "friends as friends
-                LEFT JOIN " . MYSQL_PREFIX . "status as status ON friends.friend_id = status.user_id WHERE friends.user_id = :user_id AND status.status > 0";
-            $update_friends = self::$db->prepare($update_friends_sql);
+        if ($changed_status) {
+            // broadcast status update to online friends
+            $sql = "INSERT INTO ".MYSQL_PREFIX."messages (from_id, to_id, message, type)
+                SELECT :user_id, f.friend_id, :status, 's'
+                  FROM ".MYSQL_PREFIX."friends AS f
+                  LEFT JOIN ".MYSQL_PREFIX."status AS s ON f.friend_id = s.user_id
+                 WHERE f.user_id = :user_id AND s.status > 0";
+            $update_friends = self::$db->prepare($sql);
             
             $update_friends->execute(array(
                 ':user_id' => $this->user_id,
-                ':status' => $s . ':' . $message
+                ':status' => $status_id . ':' . $message
             ));
         }
         
@@ -232,8 +263,11 @@ class MySQL_Status extends BaseStatus {
     }
 }
 
-class MySQL_Message extends BaseMessage {
-    function __construct($from=0, $to=0, $message='', $type='m') {
+
+class MySQL_Message extends BaseMessage
+{
+    function __construct($from=0, $to=0, $message='', $type='m')
+    {
         self::$db = MySQL_Database::instance();
         
         $this->id = 0;
@@ -247,18 +281,18 @@ class MySQL_Message extends BaseMessage {
         $this->autosave = true;
     }
     
-    public static function send($from=0, $to=0, $message='') {
-        if(!self::$db)
+    public static function send($from=0, $to=0, $message='')
+    {
+        if (!self::$db)
             self::$db = MySQL_Database::instance();
             
-        if(isset($this) && $this->from && !$from) {
+        if (isset($this) && $this->from && !$from) {
             $from = $this->from;
             $to = $this->to;
             $message = $this->message;
         }
                 
-        $send_sql = "INSERT INTO " . MYSQL_PREFIX . "messages (from_id, to_id, type, message)
-            VALUES(:from, :to, 'm', :message)";
+        $send_sql = 'INSERT INTO '.MYSQL_PREFIX.'messages (from_id, to_id, type, message) VALUES(:from, :to, "m", :message)';
         $prep_send = self::$db->prepare($send_sql);
         
         return $prep_send->execute(array(
@@ -268,15 +302,17 @@ class MySQL_Message extends BaseMessage {
         ));
     }
     
-    public static function get($id) {
-        if(!self::$db)
+    public static function get($id)
+    {
+        if (!self::$db)
             self::$db = MySQL_Database::instance();
-            
-        $get_sql = "SELECT * FROM " . MYSQL_PREFIX . "messages WHERE message_id=:id LIMIT 1";
+        
+        $get_sql = 'SELECT * FROM '.MYSQL_PREFIX.'messages WHERE message_id=:id LIMIT 1';
+        
         $get_message = self::$db->prepare($get_sql);
         $get_message->execute(array(':id' => intval($id)));
         
-        if($get_message->rowCount()) {
+        if ($get_message->rowCount()) {
             $msg_obj = $get_message->fetch(PDO::FETCH_OBJ);
             
             $message = new Message($msg_obj->from, $msg_obj->to, $msg_obj->message, $msg_obj->type);
@@ -288,26 +324,27 @@ class MySQL_Message extends BaseMessage {
         }
     }
     
-    public static function getMany($from_or_to, $user) {
+    public static function getMany($from_or_to, $user)
+    {
         if(!self::$db)
             self::$db = MySQL_Database::instance();
 
         $get_sql = "SELECT message_id, u1.username as `from`, u2.username as `to`, message, `type`, sent FROM " . MYSQL_PREFIX . "messages as m
-                    LEFT JOIN ajaxim_users as u1 ON m.to_id = u1.user_id
-                    LEFT JOIN ajaxim_users as u2 ON m.from_id = u2.user_id WHERE ";
-        if(is_numeric($user)) {
-            $get_sql .= ($from_or_to == 'from' ? 'from' : 'to') . "_id = :user";
+                    LEFT JOIN ajaxim_users as u2 ON m.to_id = u2.user_id
+                    LEFT JOIN ajaxim_users as u1 ON m.from_id = u1.user_id WHERE ";
+        if (is_numeric($user)) {
+            $get_sql .= ($from_or_to == 'from' ? 'from_id' : 'to_id') . " = :user";
         } else {
-            $get_sql .= "u" . ($from_or_to == 'from' ? '2' : '1') . ".username = :user";
+            $get_sql .= ($from_or_to == 'from' ? 'u1' : 'u2') . ".username = :user";
         }
         $get_sql .= " AND `read` = 0 ORDER BY sent ASC";
-
+        
         $get_messages = self::$db->prepare($get_sql);
         $get_messages->execute(array(':user' => $user));
         
-        if($get_messages->rowCount()) {
+        if ($get_messages->rowCount()) {
             $messages = array(); $message_ids = array();
-            while($msg_obj = $get_messages->fetch(PDO::FETCH_OBJ)) {
+            while ($msg_obj = $get_messages->fetch(PDO::FETCH_OBJ)) {
                 $messages[] = new Message($msg_obj->from, $msg_obj->to, $msg_obj->message, $msg_obj->type);
                 $idx = count($messages) - 1;
                 $messages[$idx]->sent = strtotime($msg_obj->sent);
@@ -326,11 +363,12 @@ class MySQL_Message extends BaseMessage {
         }
     }
     
-    public function sent($ts=null) {
-        if($ts) {
+    public function sent($ts=null)
+    {
+        if ($ts) {
             $this->sent = $ts;
             
-            if($this->id && $this->autosave) {            
+            if ($this->id && $this->autosave) {            
                 $updatets_sql = "UPDATE " . MYSQL_PREFIX . "messages SET sent=FROM_UNIXTIME(:ts) WHERE message_id=:id";
                 $updatets = self::$db->prepare($updatets_sql);
                 
@@ -342,9 +380,9 @@ class MySQL_Message extends BaseMessage {
 
             return $this;
         } else {
-            if($this->sent) {
+            if ($this->sent) {
                 return $this->sent;
-            } else if($this->id) {
+            } else if ($this->id) {
                 $getts_sql = "SELECT sent FROM " . MYSQL_PREFIX . "messages WHERE message_id=:id LIMIT 1";
                 $getts = self::$db->prepare($getts_sql);
                 $getts->execute(array(':id' => $this->id));
@@ -362,12 +400,13 @@ class MySQL_Message extends BaseMessage {
         }
     }
     
-    public function from($from=null) {
+    public function from($from=null)
+    {
         // check if from is int, string, or User object
-        if($from) {
+        if ($from) {
             $this->from = $from;
             
-            if($this->id && $this->autosave) {
+            if ($this->id && $this->autosave) {
                 $updatefrom_sql = "UPDATE " . MYSQL_PREFIX . "messages SET from=:from WHERE message_id=:id";
                 $updatefrom = self::$db->prepare($updatefrom_sql);
                 
@@ -379,14 +418,14 @@ class MySQL_Message extends BaseMessage {
             
             return $this;
         } else {
-            if($this->from) {
+            if ($this->from) {
                 return $this->from;
-            } else if($this->id) {
+            } else if ($this->id) {
                 $getfrom_sql = "SELECT from FROM " . MYSQL_PREFIX . "messages WHERE message_id=:id LIMIT 1";
                 $getfrom = self::$db->prepare($getfrom_sql);
                 $getfrom->execute(array(':id' => $this->id));
                 
-                if($getfrom->rowCount()) {
+                if ($getfrom->rowCount()) {
                     $msg_obj = $getfrom->fetch(PDO::FETCH_OBJ);
                     $this->from = $msg_obj->from;
                     return $this->from;
@@ -399,31 +438,28 @@ class MySQL_Message extends BaseMessage {
         }
     }
     
-    public function to($to=null) {
+    public function to($to=null)
+    {
         // check if to is int, string, or User object
-        if($to) {
+        if ($to) {
             $this->to = $to;
-            
-            if($this->id && $this->autosave) {
+            if ($this->id && $this->autosave) {
                 $updateto_sql = "UPDATE " . MYSQL_PREFIX . "messages SET to=:to WHERE message_id=:id";
                 $updateto = self::$db->prepare($updateto_sql);
-                
                 $updateto->execute(array(
                     ':to' => $to,
                     ':id' => $this->id
                 ));
             }
-            
             return $this;
         } else {
-            if($this->to) {
+            if ($this->to) {
                 return $this->to;
-            } else if($this->id) {
+            } else if ($this->id) {
                 $getto_sql = "SELECT to FROM " . MYSQL_PREFIX . "messages WHERE message_id=:id LIMIT 1";
                 $getto = self::$db->prepare($getto_sql);
                 $getto->execute(array(':id' => $this->id));
-                
-                if($getto->rowCount()) {
+                if ($getto->rowCount()) {
                     $msg_obj = $getto->fetch(PDO::FETCH_OBJ);
                     $this->to = $msg_obj->to;
                     return $this->to;
@@ -431,15 +467,14 @@ class MySQL_Message extends BaseMessage {
                     return false;
                 }
             }
-            
             return false;
         }
     }
     
-    public function message($message=null) {
-        if($message) {
+    public function message($message=null)
+    {
+        if ($message) {
             $this->message = $message;
-            
             if($this->id && $this->autosave) {
                 $updatemsg_sql = "UPDATE " . MYSQL_PREFIX . "messages SET message=:message WHERE message_id=:id";
                 $updatemsg = self::$db->prepare($updatemsg_sql);
@@ -461,7 +496,7 @@ class MySQL_Message extends BaseMessage {
                 
                 if($getmsg->rowCount()) {
                     $msg_obj = $getmsg->fetch(PDO::FETCH_OBJ);
-                    $this->message = $msg_obj->message;
+                    $this->message = 'message'.$msg_obj->message;
                     return $this->message;
                 } else {
                     return false;
@@ -472,7 +507,8 @@ class MySQL_Message extends BaseMessage {
         }
     }
     
-    public function save($id=null) {
+    public function save($id=null)
+    {
         if(!$this->id && !$id)
             return false;
         else if($this->id)
@@ -519,10 +555,12 @@ class MySQL_Message extends BaseMessage {
     }
 }
 
-class MySQL_Friend extends BaseFriend {
+class MySQL_Friend extends BaseFriend
+{
     static $db = null;
     
-    function __construct($user=null, $friend=null, $group=null) {
+    function __construct($user=null, $friend=null, $group=null)
+    {
         self::$db = MySQL_Database::instance();
     
         $this->id = 0;
@@ -534,21 +572,25 @@ class MySQL_Friend extends BaseFriend {
         $this->autosave = true;
     }
     
-    public static function of($user=0, $offline=false) {
-        if(!$user && (isset($this) && !$this->user))
+    public static function of($user=0, $offline=false)
+    {
+        if (!$user && (isset($this) && !$this->user)) {
             return array();
+        }
             
-        if(isset($this) && $this->user && !$user)
+        if (isset($this) && $this->user && !$user) {
             $user = $this->user;
+        }
 
-        if(!self::$db)
+        if (!self::$db) {
             self::$db = MySQL_Database::instance();
+        }
         
-        $friends_of_sql = "SELECT users.username as u, status.status as s, groups.name as g FROM " . MYSQL_PREFIX . "friends as friends
-            LEFT JOIN " . MYSQL_PREFIX . "users as users ON friends.friend_id = users.user_id
-            LEFT JOIN " . MYSQL_PREFIX . "status as status ON users.user_id = status.user_id
-            LEFT JOIN " . MYSQL_PREFIX . "groups as groups ON friends.group_id = groups.group_id
-            WHERE friends.user_id = :user" . ($offline ? "" : " AND status.status != 0");
+        $friends_of_sql = "SELECT users.username AS u, status.status AS s, status.message AS m, groups.name AS g FROM " . MYSQL_PREFIX . "friends AS friends
+            LEFT JOIN " . MYSQL_PREFIX . "users AS users ON friends.friend_id = users.user_id
+            LEFT JOIN " . MYSQL_PREFIX . "status AS status ON users.user_id = status.user_id
+            LEFT JOIN " . MYSQL_PREFIX . "groups AS groups ON friends.group_id = groups.group_id
+            WHERE friends.user_id = :user AND status.status <> 3" . ($offline ? "" : " AND status.status != 0");
 
         $friends_of = self::$db->prepare($friends_of_sql);
         
@@ -561,7 +603,8 @@ class MySQL_Friend extends BaseFriend {
         }
     }
     
-    public static function get($id) {
+    public static function get($id)
+    {
         if(!self::$db)
             self::$db = MySQL_Database::instance();
             
@@ -581,7 +624,8 @@ class MySQL_Friend extends BaseFriend {
         }
     }
 
-    public static function find($friend, $user=0) {
+    public static function find($friend, $user=0)
+    {
         if(!$user && (isset($this) && !$this->user))
             return false;
     
@@ -617,7 +661,8 @@ class MySQL_Friend extends BaseFriend {
         }
     }
 
-    public function group($group=null) {
+    public function group($group=null)
+    {
         if($group) {
             $this->group = $group;
             
@@ -666,7 +711,8 @@ class MySQL_Friend extends BaseFriend {
         }
     }
     
-    public function save($id=null) {
+    public function save($id=null)
+    {
         $as = $this->autosave;
         $this->autosave = false;
         
@@ -739,8 +785,7 @@ class MySQL_Friend extends BaseFriend {
         }
     }
     
-    public function remove() {
-    }
+    public function remove() {}
 }
 
 /* SQL:
